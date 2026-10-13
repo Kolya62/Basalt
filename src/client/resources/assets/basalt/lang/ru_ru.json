@@ -42,7 +42,7 @@
  "basalt.option.gpuculling": "Отсечение на видеокарте",
  "basalt.option.gpuculling.tooltip": "Авто: включается при дальности от 24 чанков.",
  "basalt.option.vsync_mode": "Вертикальная синхронизация",
- "basalt.option.vsync_mode.tooltip": "Mailbox: без разрывов и с меньшей задержкой. FIFO: классическая.",
+ "basalt.option.vsync_mode.tooltip": "FIFO: классическая. Mailbox: без разрывов и с меньшей задержкой, но рендерит до лимита FPS и отбрасывает лишние кадры (выше нагрузка на GPU и расход энергии).",
  "basalt.option.entityculling.max_distance": "Дальность проверки скрытых",
  "basalt.option.entityculling.max_distance.tooltip": "Как далеко проверять, скрыта ли сущность за стенами.",
  "basalt.option.gpuselect": "Выбор видеокарты",

@@ -38,7 +38,6 @@ public final class CompactTerrain {
 		int quads = block.remaining() / (IN_SIZE * 4);
 		long src = MemoryUtil.memAddress(block);
 		byte[] facing = new byte[quads];
-		float[] planeOf = new float[quads];
 		int[] counts = new int[7];
 		float[] plane = new float[14];
 		for (int g = 0; g < 7; g++) {
@@ -52,7 +51,6 @@ public final class CompactTerrain {
 			counts[f]++;
 			if (f < 6) {
 				float p = MemoryUtil.memGetFloat(b + 4L * (f >> 1 == 0 ? 1 : f >> 1 == 1 ? 2 : 0));
-				planeOf[q] = p;
 				plane[f * 2] = Math.min(plane[f * 2], p);
 				plane[f * 2 + 1] = Math.max(plane[f * 2 + 1], p);
 			}
@@ -127,15 +125,7 @@ public final class CompactTerrain {
 	/** Converts a BLOCK-format vertex buffer; the result is valid until the next call on this thread. */
 	public static ByteBuffer convert(ByteBuffer block) {
 		int vertices = block.remaining() / IN_SIZE;
-		ByteBuffer[] holder = SCRATCH.get();
-		ByteBuffer out = holder[0];
-		if (out == null || out.capacity() < vertices * OUT_SIZE) {
-			if (out != null) {
-				MemoryUtil.memFree(out);
-			}
-			out = MemoryUtil.memAlloc(Math.max(vertices * OUT_SIZE, 1 << 16));
-			holder[0] = out;
-		}
+		ByteBuffer out = scratch(vertices);
 		long src = MemoryUtil.memAddress(block);
 		long dst = MemoryUtil.memAddress(out);
 		for (int i = 0; i < vertices; i++, src += IN_SIZE, dst += OUT_SIZE) {

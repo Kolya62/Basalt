@@ -218,6 +218,7 @@ public final class Bench {
 			lowFps(sorted, 0.01), lowFps(sorted, 0.001), cpu / wall, renderCpuUs,
 			info.name(), info.backendName());
 		try {
+			Files.createDirectories(mc.gameDirectory.toPath().resolve("basalt-bench"));
 			Files.write(mc.gameDirectory.toPath().resolve("basalt-bench").resolve(LABEL + ".slow.txt"), SLOW);
 		} catch (IOException e) {
 			Basalt.LOGGER.warn("slow frame log failed", e);

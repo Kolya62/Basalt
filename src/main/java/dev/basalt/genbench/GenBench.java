@@ -74,6 +74,11 @@ public final class GenBench {
 		double seconds = (System.nanoTime() - startNs) / 1e9;
 		double cores = (cpuTime() - cpuStartNs) / 1e9 / seconds;
 		long fingerprint = fingerprint(chunks);
+		try {
+			Files.createDirectories(Path.of("basalt-genbench"));
+		} catch (IOException e) {
+			Basalt.LOGGER.error("[genbench] failed to create output directory", e);
+		}
 		dumpChunks(chunks);
 		dumpHistogram(chunks);
 		String dump = System.getProperty("basalt.genbench.dumpBlocks");

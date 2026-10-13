@@ -15,12 +15,18 @@ import net.minecraft.world.level.levelgen.synth.PerlinNoise;
  * PerlinNoise.addToVolume through the Rust kernel. Inputs are passed as heap segments (perms
  * byte[], density float[], a per-thread params long[]) to a critical downcall, so nothing is copied.
  * Before first use a self-test compares Java and Rust bit-for-bit; any mismatch disables the path.
+ * <p>
+ * The call is made per octave, so its fixed cost matters: the params segment is per thread, the
+ * perms segment per noise instance, and volumes smaller than nativenoise.min_values (e.g. the 2x2x2
+ * single-point interpolation volumes) stay in Java, where they are cheaper than the downcall.
  */
 public final class NativeNoise {
 	/** -Dbasalt.nativenoise.verify=true: also run Java on every call and compare. */
 	private static final boolean VERIFY = Boolean.getBoolean("basalt.nativenoise.verify");
 	private static final double HALF_ROUND_OFF = Math.nextDown(1.6777216E7);
-	private static final ThreadLocal<long[]> PARAMS = ThreadLocal.withInitial(() -> new long[12]); // 96 bytes, 8-aligned
+	private static final ThreadLocal<MemorySegment> PARAMS = ThreadLocal.withInitial(() -> MemorySegment.ofArray(new long[12])); // 96 bytes, 8-aligned
+	/** Smaller volumes run in Java (the downcall's fixed cost outweighs the kernel there). */
+	private static final int MIN_VALUES = minValues();
 	private static volatile int state; // 0 = untested, 2 = testing, 1 = ok, -1 = disabled
 	/** Set while we deliberately run vanilla Java (self-test, verify) so the mixin doesn't route back here. */
 	private static final ThreadLocal<Boolean> JAVA_ONLY = ThreadLocal.withInitial(() -> false);
@@ -28,20 +34,30 @@ public final class NativeNoise {
 	private NativeNoise() {
 	}
 
+	private static int minValues() {
+		try {
+			return Math.max(1, Integer.parseInt(dev.basalt.BasaltConfig.get("nativenoise.min_values", "16").trim()));
+		} catch (NumberFormatException e) {
+			return 16;
+		}
+	}
+
 	/** True if the native kernel handled the call; false means the caller must run vanilla. */
 	public static boolean addToVolume(PerlinNoise noise, DensityBuffer buffer, DensityVolume volume, double xzScale, double yScale, float amplitude) {
-		if (JAVA_ONLY.get()) {
+		int s = state;
+		if (s != 1 && (s != 0 || selfTest() != 1)) {
+			return false; // untested and failing, being tested by another thread (it runs vanilla meanwhile), or disabled
+		}
+		// JAVA_ONLY is only ever set while verifying (the self-test runs with state != 1)
+		if (VERIFY && JAVA_ONLY.get()) {
 			return false;
 		}
-		int s = state;
-		if (s == 0) {
-			s = selfTest();
-		}
-		if (s != 1) {
+		int size = volume.size();
+		if (size < MIN_VALUES) {
 			return false;
 		}
 		float[] values = ((DensityBufferAccessor) buffer).basalt$values();
-		if (values.length < volume.size() || volume.size() == 0) {
+		if (values.length < size) {
 			return false; // let vanilla handle (and throw on) odd cases; native code must never overrun
 		}
 		float[] expected = VERIFY ? values.clone() : null;
@@ -63,8 +79,7 @@ public final class NativeNoise {
 
 	private static void call(PerlinNoise noise, float[] values, DensityVolume v, double xzScale, double yScale, float amplitude) {
 		GradientNoiseAccessor acc = (GradientNoiseAccessor) noise;
-		long[] raw = PARAMS.get();
-		MemorySegment p = MemorySegment.ofArray(raw);
+		MemorySegment p = PARAMS.get();
 		p.set(ValueLayout.JAVA_DOUBLE, 0, acc.basalt$offsetX());
 		p.set(ValueLayout.JAVA_DOUBLE, 8, acc.basalt$offsetY());
 		p.set(ValueLayout.JAVA_DOUBLE, 16, acc.basalt$offsetZ());
@@ -82,7 +97,7 @@ public final class NativeNoise {
 		p.set(ValueLayout.JAVA_INT, 80, v.sizeY());
 		p.set(ValueLayout.JAVA_INT, 84, v.sizeZ());
 		try {
-			NativeLib.get().perlinAddToVolume.invokeExact(p, MemorySegment.ofArray(acc.basalt$perms()), MemorySegment.ofArray(values));
+			NativeLib.get().perlinAddToVolume.invokeExact(p, ((PermsSegmentHolder) noise).basalt$permsSegment(), MemorySegment.ofArray(values));
 		} catch (Throwable t) {
 			throw new IllegalStateException("Basalt native noise call failed", t);
 		}

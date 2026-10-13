@@ -32,8 +32,11 @@ public class LevelRendererMixin {
 	private RenderPass basalt$splittableMainPass(CommandEncoder encoder, Supplier<String> label, GpuTextureView color, Optional<Vector4fc> clearColor,
 		GpuTextureView depth, OptionalDouble clearDepth, Operation<RenderPass> original) {
 		RenderPass pass = original.call(encoder, label, color, clearColor, depth, clearDepth);
+		if (!GpuCulling.wantsSplit() || depth == null) {
+			return pass;
+		}
 		String name = label.get();
-		if (!GpuCulling.wantsSplit() || depth == null || !(name.equals("Main") || name.equals("Solid"))) {
+		if (!(name.equals("Main") || name.equals("Solid"))) {
 			return pass;
 		}
 		return SplittablePass.wrap(pass, () -> {

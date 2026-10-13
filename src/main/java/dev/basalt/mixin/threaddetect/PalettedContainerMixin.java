@@ -16,6 +16,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * ~130 bytes each and ~200k of them in a normal world. Its only job is to crash with thread dumps
  * when two threads use one container at once. An int owner flag with CAS plus the owning thread
  * does the same job; the second thread fails immediately instead of after waiting.
+ * <p>
+ * Acquire is a single CAS; release is a release-store (no StoreLoad fence). The owner thread is
+ * only used for the crash report, so it is written plainly.
  */
 @Mixin(PalettedContainer.class)
 public class PalettedContainerMixin {
@@ -30,7 +33,7 @@ public class PalettedContainerMixin {
 	}
 
 	@Unique private volatile int basalt$state;
-	@Unique private volatile Thread basalt$owner;
+	@Unique private Thread basalt$owner; // diagnostics only
 
 	/** One shared, never-used instance (acquire/release below no longer touch it); Mixin forbids null here. */
 	@Unique private static final ThreadingDetector BASALT_SHARED = new ThreadingDetector("PalettedContainer (unused)");
@@ -59,6 +62,6 @@ public class PalettedContainerMixin {
 	@Overwrite
 	public void release() {
 		this.basalt$owner = null;
-		this.basalt$state = 0;
+		BASALT_STATE.setRelease((PalettedContainer<?>) (Object) this, 0);
 	}
 }

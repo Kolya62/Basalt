@@ -103,6 +103,14 @@ public final class GpuCulling {
 					failed = true;
 					return false;
 				}
+				// Results are read back SLOTS frames later without a fence: that is only safe while the
+				// backend never has SLOTS or more submits in flight (renderpearl waits for submit N-2).
+				if (VulkanCommandEncoder.MAX_SUBMITS_IN_FLIGHT >= CullGpu.SLOTS) {
+					Basalt.LOGGER.warn("[gpuculling] backend allows {} submits in flight, need fewer than {}; disabled",
+						VulkanCommandEncoder.MAX_SUBMITS_IN_FLIGHT, CullGpu.SLOTS);
+					failed = true;
+					return false;
+				}
 				gpu = new CullGpu(device);
 				Basalt.LOGGER.info("[gpuculling] initialised");
 			}
@@ -158,6 +166,13 @@ public final class GpuCulling {
 	/** Fresh extraction results (a reused frame keeps the previous ones, which are then identical). */
 	public static void captureExtraction(Object[] refs, int[] origins, int count, Set<LevelRenderer.ChunkDrawGroup> phase2,
 		Map<ChunkSectionLayer, List<LevelRenderer.ChunkDrawGroup>> groups) {
+		if (!splitThisFrame) {
+			// only a split frame uses these; don't keep the sections reachable otherwise
+			if (sectionCount != 0) {
+				reset();
+			}
+			return;
+		}
 		sectionRefs = refs;
 		sectionOrigins = origins;
 		sectionCount = count;
@@ -199,7 +214,7 @@ public final class GpuCulling {
 			camZ = cz;
 			VIEW_PROJ.set(PROJECTION).mul(modelView);
 			int s = slot();
-			long p = gpu.sections(s).address();
+			long p = gpu.sectionsAddress(s);
 			for (int k = 0; k < sectionCount; k++) {
 				MemoryUtil.memPutFloat(p, (float) (sectionOrigins[k * 3] - cx));
 				MemoryUtil.memPutFloat(p + 4, (float) (sectionOrigins[k * 3 + 1] - cy));
@@ -285,14 +300,15 @@ public final class GpuCulling {
 			// test every section
 			long cs = gpu.allocSet(s, gpu.cull);
 			gpu.writeImage(cs, 0, gpu.hizAllView, true);
-			gpu.writeBuffer(cs, 1, gpu.slotBufferHandle(s), 0, Math.max(16L, 16L * SLOT_COUNT[s]));
-			gpu.writeBuffer(cs, 2, gpu.slotBufferHandle(s), CullGpu.sectionBytes(), Math.max(4L, 4L * SLOT_COUNT[s]));
+			gpu.writeBuffer(cs, 1, gpu.sectionBufferHandle(s), 0, Math.max(16L, 16L * SLOT_COUNT[s]));
+			gpu.writeBuffer(cs, 2, gpu.visibleBufferHandle(s), 0, Math.max(4L, 4L * SLOT_COUNT[s]));
 			push.clear();
 			VIEW_PROJ.get(push);
 			push.position(64);
 			push.putInt(gpu.hizW).putInt(gpu.hizH).putInt(gpu.levels).putInt(SLOT_COUNT[s]).flip();
 			dispatch(cb, stack, gpu.cull, cs, push, (SLOT_COUNT[s] + 63) / 64, 1);
 			computeBarrier(cb, stack);
+			hostReadBarrier(cb, stack); // the CPU reads these results back SLOTS frames later
 			// zero phase-2 commands of occluded sections, in place
 			Map<GpuBuffer, Long> sets = new IdentityHashMap<>();
 			for (List<ChunkSectionsToRender.GpuMultiDrawIndexedIndirect> draws : PHASE2_DRAWS.values()) {
@@ -303,7 +319,7 @@ public final class GpuCulling {
 					GpuBuffer commands = d.indirectCommandBuffer().buffer();
 					long ps = sets.computeIfAbsent(commands, b -> {
 						long ns = gpu.allocSet(s, gpu.patch);
-						gpu.writeBuffer(ns, 0, gpu.slotBufferHandle(s), CullGpu.sectionBytes(), Math.max(4L, 4L * SLOT_COUNT[s]));
+						gpu.writeBuffer(ns, 0, gpu.visibleBufferHandle(s), 0, Math.max(4L, 4L * SLOT_COUNT[s]));
 						gpu.writeBuffer(ns, 1, ((VulkanGpuBuffer) b).vkBuffer(), 0, VK_WHOLE_SIZE);
 						return ns;
 					});
@@ -326,11 +342,35 @@ public final class GpuCulling {
 		vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, b, null, null);
 	}
 
+	/** Compute writes -> host reads, so the readback sees them once the submit has completed. */
+	private static void hostReadBarrier(VkCommandBuffer cb, MemoryStack stack) {
+		org.lwjgl.vulkan.VkMemoryBarrier.Buffer b = org.lwjgl.vulkan.VkMemoryBarrier.calloc(1, stack).sType$Default()
+			.srcAccessMask(VK_ACCESS_SHADER_WRITE_BIT).dstAccessMask(VK_ACCESS_HOST_READ_BIT);
+		vkCmdPipelineBarrier(cb, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, b, null, null);
+	}
+
 	private static void dispatch(VkCommandBuffer cb, MemoryStack stack, CullGpu.Pipe pipe, long set, ByteBuffer push, int gx, int gy) {
 		vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, pipe.pipeline());
 		vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_COMPUTE, pipe.layout(), 0, stack.longs(set), null);
 		vkCmdPushConstants(cb, pipe.layout(), VK_SHADER_STAGE_COMPUTE_BIT, 0, push);
 		vkCmdDispatch(cb, Math.max(1, gx), Math.max(1, gy), 1);
+	}
+
+	/** Level changed (or left): drop every reference to the old level's sections and draw groups. */
+	public static void reset() {
+		sectionRefs = new Object[0];
+		sectionOrigins = new int[0];
+		sectionCount = 0;
+		PHASE2.clear();
+		ORDER.clear();
+		PHASE2_DRAWS.clear();
+		frameDraws = null;
+		prepared = false;
+		splitThisFrame = false;
+		java.util.Arrays.fill(SLOT_REFS, null);
+		java.util.Arrays.fill(SLOT_COUNT, 0);
+		java.util.Arrays.fill(SLOT_VALID, false);
+		DrawCache.EPOCH.incrementAndGet(); // the next frame must extract fresh (a reused one would need ORDER/PHASE2)
 	}
 
 	private static void disable(String where, Throwable t) {

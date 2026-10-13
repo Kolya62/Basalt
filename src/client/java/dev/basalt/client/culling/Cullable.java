@@ -10,4 +10,11 @@ public interface Cullable {
 	long basalt$lastRequested();
 
 	void basalt$setLastRequested(long ms);
+
+	/** Culling thread only: what the last trace saw (camera, box, world epoch) and when it ran. */
+	long basalt$tracedKey();
+
+	long basalt$tracedAt();
+
+	void basalt$setTraced(long key, long ms);
 }

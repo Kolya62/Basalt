@@ -42,7 +42,7 @@
  "basalt.option.gpuculling": "GPU culling",
  "basalt.option.gpuculling.tooltip": "Auto: enabled at render distance 24+.",
  "basalt.option.vsync_mode": "VSync mode",
- "basalt.option.vsync_mode.tooltip": "Mailbox: no tearing, lower latency. FIFO: classic.",
+ "basalt.option.vsync_mode.tooltip": "FIFO: classic vsync. Mailbox: no tearing, lower latency, but renders up to the framerate limit and drops extra frames (more GPU load and power).",
  "basalt.option.entityculling.max_distance": "Culling distance",
  "basalt.option.entityculling.max_distance.tooltip": "How far to check whether entities are hidden.",
  "basalt.option.gpuselect": "GPU selection",

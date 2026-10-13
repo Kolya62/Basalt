@@ -89,6 +89,17 @@ public class PackedDraws extends AbstractList<IndexedDraw> implements RandomAcce
 			.putInt(pos + 12, this.data[o + 3]).putInt(pos + 16, this.data[o + 4]);
 	}
 
+	/**
+	 * Writes all elements (logical order) like IndexedDraw.write, starting at byte position pos, in
+	 * the buffer's byte order. A forward list is one bulk copy; the reversed view goes element-wise.
+	 */
+	public void writeAllTo(ByteBuffer buffer, int pos) {
+		if (this.size == 0) {
+			return;
+		}
+		buffer.slice(pos, this.size * 20).order(buffer.order()).asIntBuffer().put(this.data, 0, this.size * 5);
+	}
+
 	/** Read-only reversed view sharing the base list's array. */
 	private static final class Reversed extends PackedDraws {
 		private final PackedDraws base;
@@ -114,6 +125,13 @@ public class PackedDraws extends AbstractList<IndexedDraw> implements RandomAcce
 		@Override
 		public void add(int indexCount, int instanceCount, int firstIndex, int baseVertex, int baseInstance) {
 			throw new UnsupportedOperationException();
+		}
+
+		@Override
+		public void writeAllTo(ByteBuffer buffer, int pos) {
+			for (int i = 0; i < this.size; i++) {
+				this.writeTo(buffer, i, pos + i * 20);
+			}
 		}
 
 		@Override

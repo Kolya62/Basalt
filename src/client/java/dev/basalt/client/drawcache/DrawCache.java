@@ -18,8 +18,6 @@ public final class DrawCache {
 	/** -Dbasalt.drawcache.verify=true compares every frame against vanilla. */
 	public static final boolean VERIFY = Boolean.getBoolean("basalt.drawcache.verify");
 	public static long verifiedFrames;
-	private static final boolean VERIFY_RUNS = Boolean.getBoolean("basalt.facecull.verifyruns");
-	public static long RUNS_VERIFIED;
 
 	public final SectionRenderDispatcher owner;
 	/** False if some layer has geometry that is not uploaded yet; such a cache is used for one frame only. */
@@ -37,13 +35,6 @@ public final class DrawCache {
 	/** Per-direction quad groups of the entry (opaque layers with facecull), else null. */
 	public final dev.basalt.client.compactvertex.@Nullable FacingInfo[] facings;
 
-	/**
-	 * Face-culled draw runs per entry, keyed by which of the 6 axis-aligned face groups are hidden
-	 * (64 cases): [indexCount, firstIndex, ...]. The runs depend only on that pattern, so this is
-	 * exact for every camera position. Built lazily.
-	 */
-	private int[][] runCache;
-
 	private net.minecraft.client.renderer.DynamicGpuData.@Nullable ChunkSectionInfo info;
 
 	/** Equal to new ChunkSectionInfo(x, y, z, visibility); the fully faded-in record is reused across frames. */
@@ -59,54 +50,30 @@ public final class DrawCache {
 		return created;
 	}
 
-	/** Draw runs for entry i and a camera at (rx, ry, rz) relative to the section origin. */
-	public int[] runs(int i, double rx, double ry, double rz) {
+	/**
+	 * Appends entry i's draws for a camera at (rx, ry, rz) relative to the section origin: direction
+	 * groups facing away from the camera are skipped and runs of visible groups are merged. Computed
+	 * on the fly (seven group checks) straight into the draw list: a per-mesh cache of all 64 hidden
+	 * patterns cost far more memory, and cache misses, than it saved.
+	 */
+	public void addRuns(int i, double rx, double ry, double rz, PackedDraws draws, int baseInstance) {
 		dev.basalt.client.compactvertex.FacingInfo facing = this.facings[i];
-		if (this.runCache == null) {
-			this.runCache = new int[this.count * 64][];
-		}
-		int pattern = 0;
-		for (int g = 0; g < 6; g++) {
-			if (facing.hidden(g, rx, ry, rz)) {
-				pattern |= 1 << g;
-			}
-		}
-		int slot = i * 64 + pattern;
-		int[] runs = this.runCache[slot];
-		if (runs == null) {
-			runs = computeRuns(facing, this.firstIndex[i], rx, ry, rz);
-			this.runCache[slot] = runs;
-		}
-		if (VERIFY_RUNS) {
-			int[] exact = computeRuns(facing, this.firstIndex[i], rx, ry, rz);
-			if (!java.util.Arrays.equals(exact, runs)) {
-				throw new IllegalStateException("basalt: cached face-cull runs differ " + java.util.Arrays.toString(runs) + " vs " + java.util.Arrays.toString(exact));
-			}
-			RUNS_VERIFIED++;
-		}
-		return runs;
-	}
-
-	/** Skips direction groups facing away from the camera and merges runs of visible groups. */
-	private static int[] computeRuns(dev.basalt.client.compactvertex.FacingInfo facing, int firstIndex, double rx, double ry, double rz) {
-		int[] out = new int[16];
-		int n = 0;
-		int runStart = -1, quad = 0, runQuad = 0;
+		int[] counts = facing.quadCounts();
+		int first = this.firstIndex[i], base = this.baseVertex[i];
+		int quad = 0, runQuad = -1;
 		for (int g = 0; g <= 7; g++) {
-			boolean visible = g < 7 && facing.quadCounts()[g] > 0 && !facing.hidden(g, rx, ry, rz);
-			if (visible && runStart < 0) {
-				runStart = g;
+			boolean visible = g < 7 && counts[g] > 0 && !facing.hidden(g, rx, ry, rz);
+			if (visible && runQuad < 0) {
 				runQuad = quad;
-			} else if (!visible && runStart >= 0 && (g == 7 || facing.quadCounts()[g] > 0)) {
-				out[n++] = (quad - runQuad) * 6;
-				out[n++] = firstIndex + runQuad * 6;
-				runStart = -1;
+			} else if (!visible && runQuad >= 0 && (g == 7 || counts[g] > 0)) {
+				// empty groups neither start nor end a run, so runs merge across them
+				draws.add((quad - runQuad) * 6, 1, first + runQuad * 6, base, baseInstance);
+				runQuad = -1;
 			}
 			if (g < 7) {
-				quad += facing.quadCounts()[g];
+				quad += counts[g];
 			}
 		}
-		return java.util.Arrays.copyOf(out, n);
 	}
 
 	private DrawCache(SectionRenderDispatcher owner, SectionMesh mesh) {

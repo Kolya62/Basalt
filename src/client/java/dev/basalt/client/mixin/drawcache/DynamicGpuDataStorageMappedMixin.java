@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 
-/** Packed draw lists are copied into the mapped buffer directly instead of element by element. */
+/** Packed draw lists are bulk-copied into the mapped buffer instead of written element by element. */
 @Mixin(DynamicGpuDataStorageMapped.class)
 public class DynamicGpuDataStorageMappedMixin {
 	@Shadow @Final private int blockSize;
@@ -23,9 +23,7 @@ public class DynamicGpuDataStorageMappedMixin {
 		@com.llamalad7.mixinextras.sugar.Local(name = "bufferPositionIndex") com.llamalad7.mixinextras.sugar.ref.LocalIntRef bufferPositionIndex) {
 		if (list instanceof PackedDraws packed && this.blockSize == 20) {
 			int start = bufferPositionIndex.get();
-			for (int i = 0; i < packed.size(); i++) {
-				packed.writeTo(byteBuffer, i, (start + i) * 20);
-			}
+			packed.writeAllTo(byteBuffer, start * 20);
 			bufferPositionIndex.set(start + packed.size());
 			return java.util.Collections.emptyIterator(); // vanilla's per-element loop then does nothing
 		}

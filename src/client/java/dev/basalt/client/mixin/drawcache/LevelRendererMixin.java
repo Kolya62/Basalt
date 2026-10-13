@@ -314,11 +314,8 @@ public class LevelRendererMixin {
 					if (facing == null) {
 						((dev.basalt.client.drawcache.PackedDraws) group.draws()).add(cache.indexCount[i], 1, cache.firstIndex[i], cache.baseVertex[i], sectionInfoIndex);
 					} else {
-						int[] runs = cache.runs(i, camX - origin.getX(), camY - origin.getY(), camZ - origin.getZ());
-						dev.basalt.client.drawcache.PackedDraws draws = (dev.basalt.client.drawcache.PackedDraws) group.draws();
-						for (int r = 0; r < runs.length; r += 2) {
-							draws.add(runs[r], 1, runs[r + 1], cache.baseVertex[i], sectionInfoIndex);
-						}
+						cache.addRuns(i, camX - origin.getX(), camY - origin.getY(), camZ - origin.getZ(),
+							(dev.basalt.client.drawcache.PackedDraws) group.draws(), sectionInfoIndex);
 					}
 				}
 			}

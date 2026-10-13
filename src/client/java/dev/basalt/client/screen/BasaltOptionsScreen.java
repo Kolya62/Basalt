@@ -66,7 +66,7 @@ public class BasaltOptionsScreen extends Screen {
 		gpus.addAll(GpuList.NAMES);
 		this.pages.add(new Page("advanced",
 			List.of(van(o.preferredGraphicsBackend())),
-			List.of(onOff("presentmode"), new BasaltOpt("vsync_mode", List.of("mailbox", "fifo")), onOff("swapchain")),
+			List.of(onOff("presentmode"), new BasaltOpt("vsync_mode", List.of("fifo", "mailbox")), onOff("swapchain")),
 			List.of(onOff("gpuselect"), new BasaltOpt("gpu", gpus))));
 		this.pages.add(new Page("world",
 			List.of(onOff("parallelgen"), onOff("nativenoise")),

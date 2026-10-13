@@ -1,8 +1,10 @@
 package dev.basalt.client.textcache;
 
+import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 import net.minecraft.client.gui.Font;
 import net.minecraft.util.FormattedCharSequence;
@@ -12,9 +14,16 @@ import net.minecraft.util.FormattedCharSequence;
  * the same: SignText keeps its FormattedCharSequence until the sign is edited. This keeps the laid
  * out glyph list per text object and layout parameters (render thread only). Obfuscated text is
  * never cached (its glyphs change every frame); a font reload clears everything.
+ * <p>
+ * Admission: a text object is cached only once it shows up in two consecutive frames. Entity name
+ * tags are rebuilt every frame (getDisplayName copies the component), so they never repeat and
+ * would otherwise cost an obfuscation scan, an entry and a map insert per tag per frame while never
+ * hitting. Now they cost two identity lookups and one insert into a per-frame set.
  */
 public final class TextCache {
 	private static final Map<FormattedCharSequence, Entry> CACHE = new IdentityHashMap<>();
+	private static Set<FormattedCharSequence> seenLastFrame = Collections.newSetFromMap(new IdentityHashMap<>());
+	private static Set<FormattedCharSequence> seenThisFrame = Collections.newSetFromMap(new IdentityHashMap<>());
 	private static int frame;
 
 	private record Entry(Font font, float x, float y, int color, boolean shadow, boolean includeEmpty, int background, Font.PreparedText text, int[] lastUse) {
@@ -35,6 +44,10 @@ public final class TextCache {
 			return e.text();
 		}
 		Font.PreparedText built = build.get();
+		if (e == null && !seenLastFrame.contains(text)) {
+			seenThisFrame.add(text); // first sighting: cache it if it is still the same object next frame
+			return built;
+		}
 		boolean[] obfuscated = {false};
 		text.accept((pos, style, cp) -> {
 			if (style.isObfuscated()) {
@@ -50,6 +63,10 @@ public final class TextCache {
 	}
 
 	public static void endFrame() {
+		Set<FormattedCharSequence> last = seenLastFrame;
+		seenLastFrame = seenThisFrame;
+		last.clear();
+		seenThisFrame = last;
 		if (++frame % 120 == 0) {
 			for (Iterator<Entry> it = CACHE.values().iterator(); it.hasNext(); ) {
 				if (frame - it.next().lastUse()[0] > 120) {
@@ -61,5 +78,7 @@ public final class TextCache {
 
 	public static void clear() {
 		CACHE.clear();
+		seenLastFrame.clear();
+		seenThisFrame.clear();
 	}
 }

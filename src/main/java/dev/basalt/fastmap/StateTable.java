@@ -1,41 +1,87 @@
 package dev.basalt.fastmap;
 
-import java.util.List;
 import net.minecraft.world.level.block.state.properties.Property;
+import org.jspecify.annotations.Nullable;
 
 /**
- * One per multi-property StateDefinition: its states in cartesian-product order (last property
- * fastest), so a state's value for property p is (index / stride[p]) % size[p] and changing it is
- * index arithmetic. Replaces each state's private neighbour table and value array.
+ * One per multi-property StateDefinition, replacing each state's private neighbour table and value
+ * array. A state is identified by a packed index: every property gets its own bit field (width =
+ * bits needed for its value count), so reading or changing one property is a shift and a mask,
+ * never a division, and values come from plain arrays (no List calls on a megamorphic site).
+ * Unused bit patterns map to null in {@link #states}.
  */
 public final class StateTable {
+	/** Definitions needing more bits stay vanilla: the sparse state array would get too large. */
+	public static final int MAX_BITS = 16;
+
 	public final Object[] states;
 	public final Property<?>[] keys;
-	public final List<?>[] values;
-	public final int[] stride;
+	public final Comparable<?>[][] values;
+	private final int[] shift;
+	private final int[] mask;
+	/** Packed index of the i-th state in vanilla's cartesian-product order (last property fastest). */
+	private final int[] packedByOrder;
 
-	public StateTable(Object[] states, Property<?>[] keys) {
+	private StateTable(Object[] states, Property<?>[] keys, Comparable<?>[][] values, int[] shift, int[] mask, int[] packedByOrder) {
 		this.states = states;
 		this.keys = keys;
-		this.values = new List<?>[keys.length];
-		this.stride = new int[keys.length];
-		int s = 1;
-		for (int p = keys.length - 1; p >= 0; p--) {
-			this.values[p] = keys[p].getPossibleValues();
-			this.stride[p] = s;
-			s *= this.values[p].size();
+		this.values = values;
+		this.shift = shift;
+		this.mask = mask;
+		this.packedByOrder = packedByOrder;
+	}
+
+	/** Builds the table for states in vanilla's cartesian-product order, or null if it would need more than MAX_BITS. */
+	public static @Nullable StateTable create(Object[] statesInOrder, Property<?>[] keys) {
+		int n = keys.length;
+		Comparable<?>[][] values = new Comparable<?>[n][];
+		int[] shift = new int[n];
+		int[] mask = new int[n];
+		int bits = 0;
+		for (int p = n - 1; p >= 0; p--) {
+			values[p] = keys[p].getPossibleValues().toArray(new Comparable<?>[0]);
+			int width = 32 - Integer.numberOfLeadingZeros(Math.max(0, values[p].length - 1));
+			shift[p] = bits;
+			mask[p] = (1 << width) - 1;
+			bits += width;
+			if (bits > MAX_BITS) {
+				return null;
+			}
 		}
+		Object[] states = new Object[1 << bits];
+		int[] packedByOrder = new int[statesInOrder.length];
+		for (int i = 0; i < statesInOrder.length; i++) {
+			// decompose the cartesian index (last property fastest) into value indices
+			int rest = i, packed = 0;
+			for (int p = n - 1; p >= 0; p--) {
+				int size = values[p].length;
+				packed |= (rest % size) << shift[p];
+				rest /= size;
+			}
+			packedByOrder[i] = packed;
+			states[packed] = statesInOrder[i];
+		}
+		return new StateTable(states, keys, values, shift, mask, packedByOrder);
 	}
 
-	public int valueIndex(int stateIndex, int property) {
-		return stateIndex / this.stride[property] % this.values[property].size();
+	public int packedIndex(int orderIndex) {
+		return this.packedByOrder[orderIndex];
 	}
 
-	public Comparable<?> value(int stateIndex, int property) {
-		return (Comparable<?>) this.values[property].get(this.valueIndex(stateIndex, property));
+	public int valueIndex(int index, int property) {
+		return index >>> this.shift[property] & this.mask[property];
 	}
 
-	public Object with(int stateIndex, int property, int newValueIndex) {
-		return this.states[stateIndex + (newValueIndex - this.valueIndex(stateIndex, property)) * this.stride[property]];
+	public Comparable<?> value(int index, int property) {
+		return this.values[property][index >>> this.shift[property] & this.mask[property]];
+	}
+
+	public Object with(int index, int property, int newValueIndex) {
+		int s = this.shift[property];
+		return this.states[index & ~(this.mask[property] << s) | newValueIndex << s];
+	}
+
+	public int valueCount(int property) {
+		return this.values[property].length;
 	}
 }

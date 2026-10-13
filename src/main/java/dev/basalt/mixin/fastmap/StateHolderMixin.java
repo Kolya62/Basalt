@@ -19,6 +19,10 @@ import org.spongepowered.asm.mixin.Unique;
  * FerriteCore-style "fast map": multi-property states share one {@link StateTable} instead of each
  * holding a neighbour table (S[][]) and a value array. Single-property and singleton states, which
  * vanilla already shares, are left untouched (table == null).
+ * <p>
+ * Vanilla 26.x already shares neighbour rows between states, so the saving is the two per-state
+ * arrays; the table is laid out so getValue/setValue stay a few shifts and array loads (no division,
+ * no List calls), about as cheap as vanilla's own lookups.
  */
 @Mixin(StateHolder.class)
 public abstract class StateHolderMixin<O, S> implements TableHolder, StateHolderMixinAccess {
@@ -39,7 +43,7 @@ public abstract class StateHolderMixin<O, S> implements TableHolder, StateHolder
 			if (table.keys[p] != this.propertyKeys[p] || table.value(index, p) != this.propertyValues[p]) {
 				return false;
 			}
-			for (int v = 0; v < table.values[p].size(); v++) {
+			for (int v = 0; v < table.valueCount(p); v++) {
 				if (table.with(index, p, v) != this.neighbors[p][v]) {
 					return false;
 				}

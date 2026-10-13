@@ -22,16 +22,20 @@ public class StateDefinitionMixin {
 	private static <O, S extends StateHolder<O, S>> ImmutableList<S> basalt$compact(ImmutableList<S> states, O owner,
 		StateDefinition.Factory<O, S> factory, Map<String, Property<?>> propertiesByName) {
 		Property<?>[] keys = propertiesByName.values().toArray(new Property<?>[0]);
-		StateTable table = new StateTable(states.toArray(), keys);
+		StateTable table = StateTable.create(states.toArray(), keys);
+		if (table == null) {
+			basalt$skipped++; // too many property bits for a packed table; vanilla's shared rows are fine
+			return states;
+		}
 		for (int i = 0; i < states.size(); i++) {
-			if (!((TableHolder) states.get(i)).basalt$compact(table, i)) {
+			if (!((TableHolder) states.get(i)).basalt$compact(table, table.packedIndex(i))) {
 				basalt$skipped++;
 				Basalt.LOGGER.warn("[fastmap] state table mismatch for {}, left as vanilla", owner);
 				return states;
 			}
 		}
 		for (int i = 0; i < states.size(); i++) {
-			((StateHolderMixinAccess) states.get(i)).basalt$apply(table, i);
+			((StateHolderMixinAccess) states.get(i)).basalt$apply(table, table.packedIndex(i));
 		}
 		basalt$compacted++;
 		return states;

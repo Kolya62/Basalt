@@ -25,7 +25,16 @@ final class CullGpu {
 	final VkDevice vk;
 	final long sampler;
 	final Pipe hizInit, hizDown, cull, patch;
-	final long[] slotBuffer = new long[SLOTS], slotMemory = new long[SLOTS], slotPtr = new long[SLOTS], slotPool = new long[SLOTS];
+	/** Per slot: section origins (CPU writes, GPU reads; write-combined memory is fine). */
+	final long[] sectionBuffer = new long[SLOTS], sectionMemory = new long[SLOTS], sectionPtr = new long[SLOTS];
+	/**
+	 * Per slot: one uint per section (GPU writes, CPU reads it back). Kept in HOST_CACHED memory when
+	 * the device has it: the first HOST_VISIBLE|HOST_COHERENT type is usually write-combined (or BAR)
+	 * memory, where every CPU load is an uncached bus transaction.
+	 */
+	final long[] visibleBuffer = new long[SLOTS], visibleMemory = new long[SLOTS], visiblePtr = new long[SLOTS];
+	final boolean[] visibleCoherent = new boolean[SLOTS];
+	final long[] slotPool = new long[SLOTS];
 
 	// Hi-Z pyramid; recreated when the depth buffer size changes
 	long depthImage, depthView, hizImage, hizMemory, hizAllView;
@@ -51,23 +60,32 @@ final class CullGpu {
 		this.cull = this.pipe("cull.comp", 80, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 		this.patch = this.pipe("patch.comp", 8, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
 		for (int s = 0; s < SLOTS; s++) {
-			long[] bm = this.hostBuffer(SECTION_BYTES + VISIBLE_BYTES);
-			this.slotBuffer[s] = bm[0];
-			this.slotMemory[s] = bm[1];
-			this.slotPtr[s] = bm[2];
+			long[] sections = this.hostBuffer(SECTION_BYTES, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0);
+			this.sectionBuffer[s] = sections[0];
+			this.sectionMemory[s] = sections[1];
+			this.sectionPtr[s] = sections[2];
+			long[] visible = this.hostBuffer(VISIBLE_BYTES, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, VK_MEMORY_PROPERTY_HOST_CACHED_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+			this.visibleBuffer[s] = visible[0];
+			this.visibleMemory[s] = visible[1];
+			this.visiblePtr[s] = visible[2];
+			this.visibleCoherent[s] = visible[3] != 0;
 			this.slotPool[s] = this.pool(64, 256);
 		}
 	}
 
-	ByteBufferView sections(int slot) {
-		return new ByteBufferView(this.slotPtr[slot], 0);
+	long sectionsAddress(int slot) {
+		return this.sectionPtr[slot];
 	}
 
+	/** Address of the slot's visibility results, made visible to the host (invalidated if not coherent). */
 	long visibleAddress(int slot) {
-		return this.slotPtr[slot] + SECTION_BYTES;
-	}
-
-	record ByteBufferView(long address, long offset) {
+		if (!this.visibleCoherent[slot]) {
+			try (MemoryStack stack = stackPush()) {
+				check(vkInvalidateMappedMemoryRanges(this.vk, VkMappedMemoryRange.calloc(1, stack).sType$Default().memory(this.visibleMemory[slot])
+					.offset(0).size(VK_WHOLE_SIZE)), "invalidate");
+			}
+		}
+		return this.visiblePtr[slot];
 	}
 
 	/** (Re)creates the Hi-Z pyramid for a depth buffer of the given image/size/format. */
@@ -98,7 +116,7 @@ final class CullGpu {
 			VkMemoryRequirements req = VkMemoryRequirements.calloc(stack);
 			vkGetImageMemoryRequirements(this.vk, this.hizImage, req);
 			check(vkAllocateMemory(this.vk, VkMemoryAllocateInfo.calloc(stack).sType$Default().allocationSize(req.size())
-				.memoryTypeIndex(this.memoryType(req.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)), null, lp), "hiz memory");
+				.memoryTypeIndex(this.memoryType(req.memoryTypeBits(), VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0)), null, lp), "hiz memory");
 			this.hizMemory = lp.get(0);
 			vkBindImageMemory(this.vk, this.hizImage, this.hizMemory, 0);
 			check(vkCreateImageView(this.vk, VkImageViewCreateInfo.calloc(stack).sType$Default().image(this.hizImage).viewType(VK_IMAGE_VIEW_TYPE_2D)
@@ -164,16 +182,12 @@ final class CullGpu {
 		}
 	}
 
-	long slotBufferHandle(int slot) {
-		return this.slotBuffer[slot];
+	long sectionBufferHandle(int slot) {
+		return this.sectionBuffer[slot];
 	}
 
-	static long sectionBytes() {
-		return SECTION_BYTES;
-	}
-
-	static long visibleBytes() {
-		return VISIBLE_BYTES;
+	long visibleBufferHandle(int slot) {
+		return this.visibleBuffer[slot];
 	}
 
 	private long pool(int sets, int descriptors) {
@@ -188,7 +202,8 @@ final class CullGpu {
 		}
 	}
 
-	private long[] hostBuffer(long size) {
+	/** Returns {buffer, memory, mapped pointer, 1 if the memory is host-coherent else 0}. */
+	private long[] hostBuffer(long size, int required, int preferred) {
 		try (MemoryStack stack = stackPush()) {
 			LongBuffer lp = stack.mallocLong(1);
 			check(vkCreateBuffer(this.vk, VkBufferCreateInfo.calloc(stack).sType$Default().size(size).usage(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT)
@@ -196,27 +211,51 @@ final class CullGpu {
 			long buffer = lp.get(0);
 			VkMemoryRequirements req = VkMemoryRequirements.calloc(stack);
 			vkGetBufferMemoryRequirements(this.vk, buffer, req);
+			int type = this.memoryType(req.memoryTypeBits(), required, preferred);
 			check(vkAllocateMemory(this.vk, VkMemoryAllocateInfo.calloc(stack).sType$Default().allocationSize(req.size())
-				.memoryTypeIndex(this.memoryType(req.memoryTypeBits(), VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)), null, lp), "memory");
+				.memoryTypeIndex(type), null, lp), "memory");
 			long memory = lp.get(0);
 			vkBindBufferMemory(this.vk, buffer, memory, 0);
 			PointerBuffer pp = stack.mallocPointer(1);
-			check(vkMapMemory(this.vk, memory, 0, size, 0, pp), "map");
-			return new long[] {buffer, memory, pp.get(0)};
+			check(vkMapMemory(this.vk, memory, 0, VK_WHOLE_SIZE, 0, pp), "map");
+			int flags = this.memoryFlags(type);
+			dev.basalt.Basalt.LOGGER.debug("[gpuculling] {} bytes in memory type {} (flags 0x{})", size, type, Integer.toHexString(flags));
+			return new long[] {buffer, memory, pp.get(0), (flags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) != 0 ? 1 : 0};
 		}
 	}
 
-	private int memoryType(int bits, int flags) {
+	/**
+	 * The type with all {@code required} flags and the best {@code preferred} ones, a higher flag bit
+	 * counting more (so HOST_CACHED beats HOST_COHERENT); the first type wins ties.
+	 */
+	private int memoryType(int bits, int required, int preferred) {
 		try (MemoryStack stack = stackPush()) {
 			VkPhysicalDeviceMemoryProperties mp = VkPhysicalDeviceMemoryProperties.calloc(stack);
 			vkGetPhysicalDeviceMemoryProperties(this.vk.getPhysicalDevice(), mp);
+			int best = -1, bestScore = -1;
 			for (int i = 0; i < mp.memoryTypeCount(); i++) {
-				if ((bits & 1 << i) != 0 && (mp.memoryTypes(i).propertyFlags() & flags) == flags) {
-					return i;
+				int flags = mp.memoryTypes(i).propertyFlags();
+				if ((bits & 1 << i) != 0 && (flags & required) == required) {
+					int score = flags & preferred;
+					if (score > bestScore) {
+						best = i;
+						bestScore = score;
+					}
 				}
 			}
+			if (best >= 0) {
+				return best;
+			}
 		}
-		throw new IllegalStateException("no memory type for flags " + flags);
+		throw new IllegalStateException("no memory type for flags " + required);
+	}
+
+	private int memoryFlags(int type) {
+		try (MemoryStack stack = stackPush()) {
+			VkPhysicalDeviceMemoryProperties mp = VkPhysicalDeviceMemoryProperties.calloc(stack);
+			vkGetPhysicalDeviceMemoryProperties(this.vk.getPhysicalDevice(), mp);
+			return mp.memoryTypes(type).propertyFlags();
+		}
 	}
 
 	private Pipe pipe(String shader, int pushBytes, int... bindings) {

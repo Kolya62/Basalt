@@ -15,6 +15,7 @@
 		"nativenoise.GradientNoiseAccessor",
 		"nativenoise.PerlinNoiseMixin",
 		"parallelgen.ChunkStepMixin",
+		"parallelgen.StructureStartMixin",
 		"parallelgen.StructureTemplatePaletteMixin",
 		"poi.PoiManagerMixin",
 		"randomtick.ServerLevelMixin",

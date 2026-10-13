@@ -31,6 +31,11 @@ public class LevelExtractorMixin {
 		OcclusionCuller.updateCamera(this.level, pos.x(), pos.y(), pos.z());
 	}
 
+	@Inject(method = "setLevel", at = @At("HEAD"))
+	private void basalt$levelChanged(@Nullable ClientLevel level, CallbackInfo ci) {
+		OcclusionCuller.reset(); // don't keep the old level (and its chunks) reachable from the culler
+	}
+
 	@ModifyReturnValue(method = "isEntityVisible", at = @At("RETURN"))
 	private boolean basalt$cullEntity(boolean visible, Entity entity) {
 		return visible && !OcclusionCuller.isCulled(entity);

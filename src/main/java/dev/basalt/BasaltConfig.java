@@ -36,11 +36,13 @@ public final class BasaltConfig {
 		DEFAULTS.put("gpu", "");
 		DEFAULTS.put("modelpart", "true");
 		DEFAULTS.put("nativenoise", "true");
+		DEFAULTS.put("nativenoise.min_values", "16"); // smaller volumes stay in Java (downcall overhead)
 		DEFAULTS.put("parallelgen", "true");
+		DEFAULTS.put("parallelgen.threads", "0"); // 0 = auto (server: whole background pool, client: half, at least 2)
 		DEFAULTS.put("poi", "true");
 		DEFAULTS.put("presentmode", "true");
 		DEFAULTS.put("randomtick", "true");
-		DEFAULTS.put("vsync_mode", "mailbox");
+		DEFAULTS.put("vsync_mode", "fifo"); // mailbox renders uncapped behind vsync: opt-in
 		DEFAULTS.put("statecache", "true");
 		DEFAULTS.put("swapchain", "true");
 		DEFAULTS.put("textcache", "true");
