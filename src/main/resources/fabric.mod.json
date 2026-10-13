@@ -7,7 +7,7 @@
 	"authors": [
 		"nikolai"
 	],
-	"license": "CC0-1.0",
+	"license": "LGPL-3.0-only",
 	"icon": "assets/basalt/icon.png",
 	"environment": "*",
 	"entrypoints": {
