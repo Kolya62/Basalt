@@ -25,8 +25,7 @@
   <a href="#-installation">Installation</a> ·
   <a href="#-features">Features</a> ·
   <a href="#-configuration">Configuration</a> ·
-  <a href="#-building">Building</a> ·
-  <a href="#-contributors">Contributors</a>
+  <a href="#-building">Building</a>
 </p>
 
 ---
@@ -160,20 +159,6 @@ repository) into `native/dist/`, which is bundled into the jar.
 - `-PnoBreaks` builds without the `breaks` section, so other optimization mods can be loaded for comparison.
 
 </details>
-
-## 👥 Contributors
-
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/Kolya62">
-        <img src="https://github.com/Kolya62.png?size=120" width="96" alt="Kolya62"><br>
-        <b>Kolya62</b>
-      </a><br>
-      <sub>Author</sub>
-    </td>
-  </tr>
-</table>
 
 ## 📜 License
 

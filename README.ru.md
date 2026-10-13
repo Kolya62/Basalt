@@ -25,8 +25,7 @@
   <a href="#-установка">Установка</a> ·
   <a href="#-возможности">Возможности</a> ·
   <a href="#-настройка">Настройка</a> ·
-  <a href="#-сборка">Сборка</a> ·
-  <a href="#-участники">Участники</a>
+  <a href="#-сборка">Сборка</a>
 </p>
 
 ---
@@ -160,20 +159,6 @@ Jar появится в `build/libs/`.
 - `-PnoBreaks` собирает мод без секции `breaks`, чтобы для сравнения можно было загрузить другие моды на оптимизацию.
 
 </details>
-
-## 👥 Участники
-
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://github.com/Kolya62">
-        <img src="https://github.com/Kolya62.png?size=120" width="96" alt="Kolya62"><br>
-        <b>Kolya62</b>
-      </a><br>
-      <sub>Автор</sub>
-    </td>
-  </tr>
-</table>
 
 ## 📜 Лицензия
 
