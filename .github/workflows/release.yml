@@ -1,0 +1,62 @@
+name: Release
+
+# Push a tag like v0.1.0 (or run it by hand with a tag) to build the mod and publish a GitHub release.
+# Release notes come from docs/releases/<tag>.md when that file exists, otherwise they are generated.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, e.g. v0.1.0"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.7.0"
+
+      - name: Build
+        run: |
+          VERSION="${TAG#v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          # gradle.properties pins the author's local JDK path; use the runner's JDK 25 instead
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+          gradle build -Pversion="$VERSION" --no-daemon --stacktrace
+
+      - name: Release notes
+        run: |
+          if [ -f "docs/releases/$TAG.md" ]; then
+            cp "docs/releases/$TAG.md" release-notes.md
+            echo "GENERATE_NOTES=false" >> "$GITHUB_ENV"
+          else
+            echo "" > release-notes.md
+            echo "GENERATE_NOTES=true" >> "$GITHUB_ENV"
+          fi
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: Basalt ${{ env.VERSION }}
+          body_path: release-notes.md
+          generate_release_notes: ${{ env.GENERATE_NOTES == 'true' }}
+          files: build/libs/basalt-${{ env.VERSION }}.jar
+          fail_on_unmatched_files: true

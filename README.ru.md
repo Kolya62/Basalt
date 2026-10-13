@@ -15,8 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Kolya62/Basalt/raw/main/releases/basalt-0.1.0.jar">
-    <img src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-basalt--0.1.0.jar-FF7A3D?style=for-the-badge&logo=github&logoColor=white" alt="Скачать basalt-0.1.0.jar">
+  <a href="https://github.com/Kolya62/Basalt/releases/latest">
+    <img src="https://img.shields.io/badge/%D0%A1%D0%BA%D0%B0%D1%87%D0%B0%D1%82%D1%8C-%D0%BF%D0%BE%D1%81%D0%BB%D0%B5%D0%B4%D0%BD%D0%B8%D0%B9_%D1%80%D0%B5%D0%BB%D0%B8%D0%B7-FF7A3D?style=for-the-badge&logo=github&logoColor=white" alt="Скачать последний релиз">
   </a>
 </p>
 
@@ -65,7 +65,7 @@
 
 1. Установите [Fabric Loader](https://fabricmc.net/use/) **0.19.5+** для Minecraft **26.3**.
 2. Положите [Fabric API](https://modrinth.com/mod/fabric-api) и
-   [`basalt-0.1.0.jar`](https://github.com/Kolya62/Basalt/raw/main/releases/basalt-0.1.0.jar) в папку `mods`.
+   `basalt-<версия>.jar` из [релизов](https://github.com/Kolya62/Basalt/releases/latest) в папку `mods`.
 3. Запускайте игру на **Java 25**.
 
 > [!NOTE]
@@ -137,6 +137,9 @@ gradle build
 ```
 
 Jar появится в `build/libs/`.
+
+**Релизы:** пуш тега `vX.Y.Z` запускает GitHub Actions — мод собирается и публикуется релиз с jar;
+описание берётся из `docs/releases/vX.Y.Z.md`, если такой файл есть.
 
 > [!TIP]
 > В `gradle.properties` указан `org.gradle.java.home` с путём к локальному JDK автора. На другой

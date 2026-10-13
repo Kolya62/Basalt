@@ -15,8 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/Kolya62/Basalt/raw/main/releases/basalt-0.1.0.jar">
-    <img src="https://img.shields.io/badge/Download-basalt--0.1.0.jar-FF7A3D?style=for-the-badge&logo=github&logoColor=white" alt="Download basalt-0.1.0.jar">
+  <a href="https://github.com/Kolya62/Basalt/releases/latest">
+    <img src="https://img.shields.io/badge/Download-latest_release-FF7A3D?style=for-the-badge&logo=github&logoColor=white" alt="Download the latest release">
   </a>
 </p>
 
@@ -65,7 +65,7 @@ Every optimization is a separate feature that can be switched off on its own.
 
 1. Install [Fabric Loader](https://fabricmc.net/use/) **0.19.5+** for Minecraft **26.3**.
 2. Put [Fabric API](https://modrinth.com/mod/fabric-api) and
-   [`basalt-0.1.0.jar`](https://github.com/Kolya62/Basalt/raw/main/releases/basalt-0.1.0.jar) into your `mods` folder.
+   `basalt-<version>.jar` from [Releases](https://github.com/Kolya62/Basalt/releases/latest) into your `mods` folder.
 3. Start the game with **Java 25**.
 
 > [!NOTE]
@@ -137,6 +137,9 @@ gradle build
 ```
 
 The jar is written to `build/libs/`.
+
+**Releases:** pushing a tag `vX.Y.Z` makes GitHub Actions build the mod and publish a release with the jar;
+release notes are taken from `docs/releases/vX.Y.Z.md` when it exists.
 
 > [!TIP]
 > `gradle.properties` contains `org.gradle.java.home` with the author's local JDK path. On another
