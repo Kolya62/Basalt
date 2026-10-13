@@ -45,7 +45,8 @@ jobs:
         run: |
           VERSION="${TAG#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          gradle build -Pversion="$VERSION" --no-daemon --stacktrace
+          # without the configuration cache, so the jar matches a plain local build (Loom manifest entries included)
+          gradle build -Pversion="$VERSION" --no-daemon --no-configuration-cache --stacktrace
 
       - name: Release notes
         run: |
