@@ -30,6 +30,13 @@ jobs:
           distribution: temurin
           java-version: "25"
 
+      # gradle.properties pins the author's local JDK path; every Gradle call (setup-gradle runs Gradle
+      # too) must use the runner's JDK 25 instead. The user-home properties file wins over the project's.
+      - name: Use the runner's JDK for Gradle
+        run: |
+          mkdir -p ~/.gradle
+          echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.7.0"
@@ -38,9 +45,6 @@ jobs:
         run: |
           VERSION="${TAG#v}"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          # gradle.properties pins the author's local JDK path; use the runner's JDK 25 instead
-          mkdir -p ~/.gradle
-          echo "org.gradle.java.home=$JAVA_HOME" >> ~/.gradle/gradle.properties
           gradle build -Pversion="$VERSION" --no-daemon --stacktrace
 
       - name: Release notes
