@@ -7,6 +7,11 @@
 	"authors": [
 		"nikolai"
 	],
+	"contact": {
+		"homepage": "https://github.com/Kolya62/Basalt",
+		"sources": "https://github.com/Kolya62/Basalt",
+		"issues": "https://github.com/Kolya62/Basalt/issues"
+	},
 	"license": "LGPL-3.0-only",
 	"icon": "assets/basalt/icon.png",
 	"environment": "*",

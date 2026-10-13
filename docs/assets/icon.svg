@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="topi" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9aa3b2"/><stop offset="1" stop-color="#5f6776"/>
+    </linearGradient>
+    <linearGradient id="lefti" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="120">
+      <stop offset="0" stop-color="#454c58"/><stop offset="0.7" stop-color="#363b45"/><stop offset="1" stop-color="#6b3420"/>
+    </linearGradient>
+    <linearGradient id="fronti" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="120">
+      <stop offset="0" stop-color="#343a44"/><stop offset="0.65" stop-color="#2a2e36"/><stop offset="1" stop-color="#7a3519"/>
+    </linearGradient>
+    <linearGradient id="righti" gradientUnits="userSpaceOnUse" x1="0" y1="20" x2="0" y2="120">
+      <stop offset="0" stop-color="#23272e"/><stop offset="0.7" stop-color="#1c1f25"/><stop offset="1" stop-color="#5a2412"/>
+    </linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1f26"/><stop offset="1" stop-color="#0b0d10"/>
+    </linearGradient>
+    <radialGradient id="lava" cx="0.5" cy="1.02" r="0.6">
+      <stop offset="0" stop-color="#ffb347" stop-opacity="0.95"/><stop offset="0.35" stop-color="#ff5a1f" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#ff5a1f" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="clip"><rect width="128" height="128" rx="26"/></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect width="128" height="128" fill="url(#bg)"/>
+    <rect y="40" width="128" height="88" fill="url(#lava)"/>
+    <polygon points="20,54 29.0,61.794 29.0,119.794 20,112" fill="url(#lefti)"/><polygon points="29.0,61.794 47.0,61.794 47.0,119.794 29.0,119.794" fill="url(#fronti)"/><polygon points="47.0,61.794 56,54 56,112 47.0,119.794" fill="url(#righti)"/><polygon points="20,54 29.0,46.206 47.0,46.206 56,54 47.0,61.794 29.0,61.794" fill="url(#topi)"/><polygon points="72,64 81.0,71.794 81.0,119.794 72,112" fill="url(#lefti)"/><polygon points="81.0,71.794 99.0,71.794 99.0,119.794 81.0,119.794" fill="url(#fronti)"/><polygon points="99.0,71.794 108,64 108,112 99.0,119.794" fill="url(#righti)"/><polygon points="72,64 81.0,56.206 99.0,56.206 108,64 99.0,71.794 81.0,71.794" fill="url(#topi)"/><polygon points="41,34 52.5,43.959 52.5,121.959 41,112" fill="url(#lefti)"/><polygon points="52.5,43.959 75.5,43.959 75.5,121.959 52.5,121.959" fill="url(#fronti)"/><polygon points="75.5,43.959 87,34 87,112 75.5,121.959" fill="url(#righti)"/><polygon points="41,34 52.5,24.041 75.5,24.041 87,34 75.5,43.959 52.5,43.959" fill="url(#topi)"/><polyline points="41,34 52.5,43.959 75.5,43.959 87,34" fill="none" stroke="#ffb27a" stroke-opacity="0.85" stroke-width="1.38" stroke-linejoin="round"/>
+    <rect y="112" width="128" height="16" fill="url(#lava)" opacity="0.9"/>
+  </g>
+</svg>
