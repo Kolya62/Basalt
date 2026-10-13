@@ -1,7 +1,9 @@
 name: Release
 
-# Push a tag like v0.1.0 (or run it by hand with a tag) to build the mod and publish a GitHub release.
-# Release notes come from docs/releases/<tag>.md when that file exists, otherwise they are generated.
+# Push a tag like v0.1.0 to build the mod and publish a GitHub release. It can also be run by hand
+# (Actions -> Release -> Run workflow) with a tag name: the selected branch is built and the tag is
+# created on its current commit. Release notes come from docs/releases/<tag>.md when that file
+# exists, otherwise they are generated.
 on:
   push:
     tags: ["v*"]
@@ -20,9 +22,8 @@ jobs:
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
+      # tag push: the tag's commit; manual run: the selected branch (the tag may not exist yet)
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
 
       - uses: actions/setup-java@v4
         with:
@@ -55,6 +56,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
           name: Basalt ${{ env.VERSION }}
           body_path: release-notes.md
           generate_release_notes: ${{ env.GENERATE_NOTES == 'true' }}
