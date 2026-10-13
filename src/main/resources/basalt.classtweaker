@@ -1,0 +1,3 @@
+classTweaker	v1	official
+accessible	class	net/minecraft/client/renderer/LevelRenderer$ChunkDrawGroup
+accessible	method	net/minecraft/client/renderer/LevelRenderer$ChunkDrawGroup	<init>	(Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lcom/mojang/renderpearl/api/buffers/GpuBufferSlice;Lcom/mojang/renderpearl/api/pipeline/IndexType;Ljava/util/List;)V

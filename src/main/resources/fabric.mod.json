@@ -1,0 +1,53 @@
+{
+	"schemaVersion": 1,
+	"id": "basalt",
+	"version": "${version}",
+	"name": "Basalt",
+	"description": "All-in-one performance mod for the Vulkan renderer.",
+	"authors": [
+		"nikolai"
+	],
+	"license": "CC0-1.0",
+	"icon": "assets/basalt/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"dev.basalt.Basalt"
+		],
+		"client": [
+			"dev.basalt.client.BasaltClient"
+		]
+	},
+	"mixins": [
+		"basalt.mixins.json",
+		{
+			"config": "basalt.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
+		"java": ">=25",
+		"fabric-resource-loader-v0": "*"
+	},
+	"accessWidener": "basalt.classtweaker",
+	"breaks": {
+		"sodium": "*",
+		"embeddium": "*",
+		"nvidium": "*",
+		"lithium": "*",
+		"canary": "*",
+		"c2me": "*",
+		"noisium": "*",
+		"ferritecore": "*",
+		"modernfix": "*",
+		"immediatelyfast": "*",
+		"entityculling": "*",
+		"moreculling": "*",
+		"badoptimizations": "*",
+		"starlight": "*",
+		"scalablelux": "*",
+		"vmp": "*"
+	}
+}

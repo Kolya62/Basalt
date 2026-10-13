@@ -1,0 +1,23 @@
+#version 460
+// Hi-Z level 0 = half resolution; each texel = MIN (farthest, reversed-Z) depth of the 2x2
+// (or 3x3 at odd edges) depth texels it covers, so occlusion tests stay conservative.
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D depthTex;
+layout(binding = 1, r32f) uniform writeonly image2D dst;
+layout(push_constant) uniform P { ivec2 srcSize; ivec2 dstSize; } p;
+
+void main() {
+    ivec2 d = ivec2(gl_GlobalInvocationID.xy);
+    if (d.x >= p.dstSize.x || d.y >= p.dstSize.y) return;
+    ivec2 s = d * 2;
+    int ex = (d.x == p.dstSize.x - 1 && (p.srcSize.x & 1) == 1) ? 2 : 1;
+    int ey = (d.y == p.dstSize.y - 1 && (p.srcSize.y & 1) == 1) ? 2 : 1;
+    float m = 1.0;
+    for (int y = 0; y <= ey; y++) {
+        for (int x = 0; x <= ex; x++) {
+            ivec2 c = min(s + ivec2(x, y), p.srcSize - 1);
+            m = min(m, texelFetch(depthTex, c, 0).r);
+        }
+    }
+    imageStore(dst, d, vec4(m));
+}

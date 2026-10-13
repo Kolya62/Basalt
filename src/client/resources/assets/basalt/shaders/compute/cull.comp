@@ -1,0 +1,42 @@
+#version 460
+// One thread per chunk section: is its 16^3 box possibly visible against the Hi-Z pyramid?
+// Reversed-Z: larger depth = nearer. A box is occluded only if its NEAREST point is farther than
+// the FARTHEST occluder depth stored for every Hi-Z texel its screen rectangle touches.
+layout(local_size_x = 64) in;
+layout(binding = 0) uniform sampler2D hiz;               // all mips, nearest
+layout(std430, binding = 1) readonly buffer Sections { vec4 origin[]; };   // section origin - camera
+layout(std430, binding = 2) writeonly buffer Visible { uint visible[]; };
+layout(push_constant) uniform P { mat4 viewProj; ivec2 hizSize; int levels; int count; } p;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= uint(p.count)) return;
+    vec3 o = origin[i].xyz;
+    vec2 lo = vec2(1e9), hi = vec2(-1e9);
+    float nearest = 0.0;
+    for (int c = 0; c < 8; c++) {
+        vec3 corner = o + vec3(c & 1, (c >> 1) & 1, (c >> 2) & 1) * 16.0;
+        vec4 clip = p.viewProj * vec4(corner, 1.0);
+        if (clip.w <= 0.05) { visible[i] = 1u; return; }   // crosses the camera plane: keep
+        vec3 ndc = clip.xyz / clip.w;
+        lo = min(lo, ndc.xy);
+        hi = max(hi, ndc.xy);
+        nearest = max(nearest, ndc.z);
+    }
+    if (nearest >= 1.0) { visible[i] = 1u; return; }
+    vec2 uvLo = clamp(lo * 0.5 + 0.5, 0.0, 1.0), uvHi = clamp(hi * 0.5 + 0.5, 0.0, 1.0);
+    // texel rectangle at level 0, then the level where it spans at most 2x2 texels
+    vec2 r0 = uvLo * vec2(p.hizSize), r1 = uvHi * vec2(p.hizSize);
+    float extent = max(r1.x - r0.x, r1.y - r0.y);
+    int level = clamp(int(ceil(log2(max(extent, 1.0)))), 0, p.levels - 1);
+    ivec2 size = textureSize(hiz, level);
+    ivec2 t0 = clamp(ivec2(floor(uvLo * vec2(size))), ivec2(0), size - 1);
+    ivec2 t1 = clamp(ivec2(floor(uvHi * vec2(size))), ivec2(0), size - 1);
+    float farthest = 1.0;
+    for (int y = t0.y; y <= t1.y; y++) {
+        for (int x = t0.x; x <= t1.x; x++) {
+            farthest = min(farthest, texelFetch(hiz, ivec2(x, y), level).r);
+        }
+    }
+    visible[i] = nearest >= farthest ? 1u : 0u;
+}

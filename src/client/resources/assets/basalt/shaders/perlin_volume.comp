@@ -1,0 +1,116 @@
+#version 460
+// Bit-exact port of net.minecraft.world.level.levelgen.synth.PerlinNoise.addToVolume (26.3).
+// Every float/double op must round exactly like Java (IEEE-754, round-to-nearest, no FMA):
+//  - all arithmetic is in `precise` expressions -> SPIR-V NoContraction (no fused multiply-add)
+//  - float-controls execution modes force RTE rounding and keep signed zeros / denormals (when supported)
+#extension GL_EXT_spirv_intrinsics : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float64 : require
+
+// capability ids: 4467 RoundingModeRTE, 4466 SignedZeroInfNanPreserve, 4464 DenormPreserve
+spirv_execution_mode(capabilities = [4467], 4462, 32); // RoundingModeRTE fp32
+spirv_execution_mode(capabilities = [4467], 4462, 64); // RoundingModeRTE fp64
+spirv_execution_mode(capabilities = [4466], 4461, 32); // SignedZeroInfNanPreserve fp32
+spirv_execution_mode(capabilities = [4466], 4461, 64); // SignedZeroInfNanPreserve fp64
+#ifdef DENORM_PRESERVE
+spirv_execution_mode(capabilities = [4464], 4459, 32); // DenormPreserve fp32
+spirv_execution_mode(capabilities = [4464], 4459, 64); // DenormPreserve fp64
+#endif
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) readonly buffer Params {
+	double offsetX, offsetY, offsetZ, xzScale, yScale, halfRoundOff;
+	float amplitude;
+	int minX, minY, minZ, stepX, stepY, stepZ, sizeX, sizeY, sizeZ;
+} p;
+layout(std430, binding = 1) readonly buffer Perms { int perms[256]; };
+layout(std430, binding = 2) buffer Out { float values[]; };
+
+const ivec3 GRADIENT[16] = ivec3[16](
+	ivec3(1, 1, 0), ivec3(-1, 1, 0), ivec3(1, -1, 0), ivec3(-1, -1, 0),
+	ivec3(1, 0, 1), ivec3(-1, 0, 1), ivec3(1, 0, -1), ivec3(-1, 0, -1),
+	ivec3(0, 1, 1), ivec3(0, -1, 1), ivec3(0, 1, -1), ivec3(0, -1, -1),
+	ivec3(1, 1, 0), ivec3(0, -1, 1), ivec3(-1, 1, 0), ivec3(0, -1, -1)
+);
+
+int permute(int x) { return perms[x & 0xFF]; }
+
+double wrap(double x) {
+	// 3.3554432E7 = 2^25: dividing by it equals multiplying by 2^-25 exactly
+	precise double r = (x >= -p.halfRoundOff && x < p.halfRoundOff) ? x : x - floor(x * 2.98023223876953125e-8lf + 0.5lf) * 33554432.0lf;
+	return r;
+}
+
+float smoothstepF(float x) {
+	precise float r = x * x * x * (x * (x * 6.0 - 15.0) + 10.0);
+	return r;
+}
+
+float lerpF(float a, float p0, float p1) {
+	precise float r = p0 + a * (p1 - p0);
+	return r;
+}
+
+float dotXz(ivec3 g, float x, float z) {
+	precise float r = float(g.x) * x + float(g.z) * z;
+	return r;
+}
+
+void main() {
+	int total = p.sizeX * p.sizeY * p.sizeZ;
+	int index = int(gl_GlobalInvocationID.x);
+	if (index >= total) return;
+	// vanilla loop order: z outer, x middle, y inner
+	int iy = index % p.sizeY;
+	int ix = (index / p.sizeY) % p.sizeX;
+	int iz = index / (p.sizeY * p.sizeX);
+
+	precise double z = wrap(double(p.minZ + iz * p.stepZ) * p.xzScale) + p.offsetZ;
+	int floorZ = int(floor(z));
+	precise float relativeZ = float(z - double(floorZ));
+	float alphaZ = smoothstepF(relativeZ);
+
+	precise double x = wrap(double(p.minX + ix * p.stepX) * p.xzScale) + p.offsetX;
+	int floorX = int(floor(x));
+	precise float relativeX = float(x - double(floorX));
+	int x0 = permute(floorX);
+	int x1 = permute(floorX + 1);
+	float alphaX = smoothstepF(relativeX);
+
+	precise double y = wrap(double(p.minY + iy * p.stepY) * p.yScale) + p.offsetY;
+	int floorY = int(floor(y));
+	precise float relativeY = float(y - double(floorY));
+	float alphaY = smoothstepF(relativeY);
+
+	int xy00 = permute(x0 + floorY);
+	int xy01 = permute(x0 + floorY + 1);
+	int xy10 = permute(x1 + floorY);
+	int xy11 = permute(x1 + floorY + 1);
+	ivec3 g000 = GRADIENT[permute(xy00 + floorZ) & 15];
+	ivec3 g100 = GRADIENT[permute(xy10 + floorZ) & 15];
+	ivec3 g010 = GRADIENT[permute(xy01 + floorZ) & 15];
+	ivec3 g110 = GRADIENT[permute(xy11 + floorZ) & 15];
+	ivec3 g001 = GRADIENT[permute(xy00 + floorZ + 1) & 15];
+	ivec3 g101 = GRADIENT[permute(xy10 + floorZ + 1) & 15];
+	ivec3 g011 = GRADIENT[permute(xy01 + floorZ + 1) & 15];
+	ivec3 g111 = GRADIENT[permute(xy11 + floorZ + 1) & 15];
+
+	precise float rxm = relativeX - 1.0;
+	precise float rzm = relativeZ - 1.0;
+	precise float rym = relativeY - 1.0;
+	precise float v000 = dotXz(g000, relativeX, relativeZ) + float(g000.y) * relativeY;
+	precise float v100 = dotXz(g100, rxm, relativeZ) + float(g100.y) * relativeY;
+	precise float v010 = dotXz(g010, relativeX, relativeZ) + float(g010.y) * rym;
+	precise float v110 = dotXz(g110, rxm, relativeZ) + float(g110.y) * rym;
+	precise float v001 = dotXz(g001, relativeX, rzm) + float(g001.y) * relativeY;
+	precise float v101 = dotXz(g101, rxm, rzm) + float(g101.y) * relativeY;
+	precise float v011 = dotXz(g011, relativeX, rzm) + float(g011.y) * rym;
+	precise float v111 = dotXz(g111, rxm, rzm) + float(g111.y) * rym;
+
+	// Mth.lerp3(alphaX, alphaY, alphaZ, ...)
+	float l0 = lerpF(alphaY, lerpF(alphaX, v000, v100), lerpF(alphaX, v010, v110));
+	float l1 = lerpF(alphaY, lerpF(alphaX, v001, v101), lerpF(alphaX, v011, v111));
+	precise float result = p.amplitude * lerpF(alphaZ, l0, l1);
+	precise float sum = values[index] + result;
+	values[index] = sum;
+}

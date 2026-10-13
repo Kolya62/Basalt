@@ -1,0 +1,15 @@
+#version 460
+// Phase-2 indirect commands (VkDrawIndexedIndirectCommand, 5 uints): zero instanceCount of
+// commands whose section (baseInstance) was found occluded.
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) readonly buffer Visible { uint visible[]; };
+layout(std430, binding = 1) buffer Commands { uint cmd[]; };
+layout(push_constant) uniform P { uint firstWord; uint count; } p;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= p.count) return;
+    uint base = p.firstWord + i * 5u;
+    uint section = cmd[base + 4u];
+    cmd[base + 1u] = visible[section];
+}

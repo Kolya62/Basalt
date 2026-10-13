@@ -1,0 +1,26 @@
+{
+	"required": true,
+	"package": "dev.basalt.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"plugin": "dev.basalt.BasaltMixinPlugin",
+	"mixins": [
+		"brain.BrainMixin",
+		"chunklevel.SimulationChunkTrackerMixin",
+		"collisions.BlockCollisionsMixin",
+		"entitysections.EntitySectionStorageMixin",
+		"fastmap.StateDefinitionMixin",
+		"fastmap.StateHolderMixin",
+		"genbench.MinecraftServerGenBenchMixin",
+		"nativenoise.DensityBufferAccessor",
+		"nativenoise.GradientNoiseAccessor",
+		"nativenoise.PerlinNoiseMixin",
+		"parallelgen.ChunkStepMixin",
+		"parallelgen.StructureTemplatePaletteMixin",
+		"poi.PoiManagerMixin",
+		"randomtick.ServerLevelMixin",
+		"statecache.BlockStateCacheMixin",
+		"threaddetect.PalettedContainerMixin",
+		"poi.SectionStorageMixin"
+	],
+	"injectors": { "defaultRequire": 1 }
+}

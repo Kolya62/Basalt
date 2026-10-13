@@ -1,0 +1,120 @@
+plugins {
+	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'maven-publish'
+}
+
+repositories {
+	// Add repositories to retrieve artifacts from in here.
+	// You should only use this when depending on other mods because
+	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
+	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
+	// for more information about repositories.
+}
+
+loom {
+	accessWidenerPath = file("src/main/resources/basalt.classtweaker")
+	splitEnvironmentSourceSets()
+
+	runs {
+		client {
+			// ./gradlew runClient -Pbench=<label> [-PbenchArgs="-Dbasalt.x=false ..."]
+			if (project.hasProperty("bench")) {
+				vmArgs "-Dbasalt.bench=${project.bench}", "-Xmx4G", "--enable-native-access=ALL-UNNAMED"
+				if (project.hasProperty("benchArgs")) {
+					vmArgs project.benchArgs.split(" ")
+				}
+				programArgs((["--quickPlaySingleplayer", "bench"] + (project.hasProperty("noForceBackend") ? [] : ["--graphicsBackend", "vulkan"])) as String[])
+			}
+		}
+		server {
+			runDir "run-server"
+			programArgs "--nogui"
+			// ./gradlew runServer -Pgenbench=<label> [-PgenbenchArgs="-Dbasalt.x=false ..."]
+			if (project.hasProperty("genbench")) {
+				vmArgs "-Dbasalt.genbench=${project.genbench}", "-Xmx6G"
+				if (project.hasProperty("genbenchArgs")) {
+					vmArgs project.genbenchArgs.split(" ")
+				}
+			}
+		}
+	}
+
+	mods {
+		"basalt" {
+			sourceSet sourceSets.main
+			sourceSet sourceSets.client
+		}
+	}
+}
+
+dependencies {
+	// To change the versions see the gradle.properties file
+	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	// Fabric API. This is technically optional, but you probably want it anyway.
+	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+}
+
+// Rust kernels (optional): ./gradlew buildNatives, or native/build-all.sh. Whatever is in
+// native/dist is bundled; missing platforms fall back to Java at runtime.
+tasks.register("buildNatives", Exec) {
+	workingDir "native"
+	commandLine "bash", "build-all.sh"
+}
+
+processResources {
+	from("native/dist")
+	def version = project.version
+	inputs.property "version", version
+
+	def noBreaks = project.hasProperty("noBreaks")
+	inputs.property "noBreaks", noBreaks
+	filesMatching("fabric.mod.json") {
+		expand "version": version
+		if (noBreaks) {
+			// benchmark only: let Sodium etc. load next to a fully disabled Basalt for comparison
+			filter { line -> line ==~ /\s*"(sodium|embeddium|nvidium|lithium|canary|c2me|noisium|ferritecore|modernfix|immediatelyfast|entityculling|moreculling|badoptimizations|starlight|scalablelux|vmp)": "\*",?/ ? null : line }
+		}
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 25
+}
+
+java {
+	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
+	// if it is present.
+	// If you remove this line, sources will not be generated.
+	withSourcesJar()
+
+	sourceCompatibility = JavaVersion.VERSION_25
+	targetCompatibility = JavaVersion.VERSION_25
+}
+
+jar {
+	def projectName = project.name
+	inputs.property "projectName", projectName
+
+	from("LICENSE") {
+		rename { "${it}_$projectName"}
+	}
+}
+
+// configure the maven publication
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			from components.java
+		}
+	}
+
+	// See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
+	repositories {
+		// Add repositories to publish to here.
+		// Notice: This block does NOT have the same function as the block in the top level.
+		// The repositories here will be used for publishing your artifact, not for
+		// retrieving dependencies.
+	}
+}
